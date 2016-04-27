@@ -95,9 +95,7 @@ class NotError(GrammarError):
 class P:
     def __init__(self, grammar):
         self.grammar = grammar
-        self.syntax_tree, _ = self._grammar(grammar)
-        print(self.syntax_tree)
-
+        self.parsed_grammar = self._grammar(grammar)
 
     @staticmethod
     def _grammar(grammar):
@@ -410,8 +408,9 @@ class P:
                 return [], rest
             raise GrammarError
         return inner
-
 p1 = P(gram)
+
+
 
 
 
