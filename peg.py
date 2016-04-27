@@ -49,6 +49,8 @@ Primary  <- '(' Expr ')'
          / Number
 Number   <- '0' / [1-9] ([0-9] / _)+
 """
+
+
 class Node:
     def __init__(self, t):
         self.type = t
@@ -90,143 +92,135 @@ class NotError(GrammarError):
     pass
 
 
-class Parser:
+class P:
     def __init__(self, grammar):
         self.grammar = grammar
-        self.parsed_grammar = self._parse_grammar(grammar)
+        self.parsed_grammar = self._grammar(grammar)
 
     @staticmethod
-    def _parse_grammar(grammar):
+    def _grammar(grammar):
         """
-        all _parse_x are of the form str -> ([Node], str)
+        all _x are of the form str -> ([Node], str)
 
         Grammar <- Spacing Definition+ EndOfFile
 
         """
 
         gram = Node("grammar")
-        spacing, rest = Parser._parse_spacing(grammar)
+        spacing, rest = P._spacing(grammar)
         children = [spacing]
 
-        definitions, rest = Parser._parse_some(Parser._parse_definition)(rest)
+        definitions, rest = P._some(P._definition)(rest)
         children += definitions
         pprint.pprint(children)
-        eof, rest = Parser._parse_EOF(rest)
+        eof, rest = P._EOF(rest)
         children += eof
         gram.children = children
 
         return [gram], rest  # rest will be empty here
 
     @staticmethod
-    def _parse_definition(rest):
+    def _definition(rest):
         """
         Definition <- Identifier LEFTARROW Expression
         """
         defn = Node("definition")
-        ident, rest = Parser._parse_IDENTIFIER(rest)
-        arrow, rest = Parser._parse_LEFTARROW(rest)
-        exp, rest = Parser._parse_expression(rest)
+        ident, rest = P._IDENTIFIER(rest)
+        arrow, rest = P._LEFTARROW(rest)
+        exp, rest = P._expression(rest)
         defn.children = ident + arrow + exp
         return [defn], rest
 
     @staticmethod
-    def _parse_expression(rest):
+    def _expression(rest):
         """
         Expression <- Sequence (SLASH Sequence)*
         """
         expr = Node("expression")
-        seq, rest = Parser._parse_sequence(rest)
-        nodes, rest = Parser._parse_maybe(Parser._parse_some(Parser._parse_paren(
-                                                        Parser._parse_SLASH,
-                                                        Parser._parse_sequence)))(rest)
+        seq, rest = P._sequence(rest)
+        nodes, rest = P._maybe(P._some(P._paren(P._SLASH, P._sequence)))(rest)
 
         expr.children = seq + nodes
         return [expr], rest
 
     @staticmethod
-    def _parse_sequence(rest):
+    def _sequence(rest):
         """
         Sequence <- Prefix*
         """
         seq = Node("sequence")
-        nodes, rest = Parser._parse_maybe(Parser._parse_some(Parser._parse_prefix))(rest)
+        nodes, rest = P._maybe(P._some(P._prefix))(rest)
         seq.children = nodes
         return [seq], rest
 
 
     @staticmethod
-    def _parse_prefix(rest):
+    def _prefix(rest):
         """
         Prefix <- (AND / NOT)? Suffix
         """
         prefix = Node("prefix")
-        nodes, rest = Parser._parse_maybe(Parser._parse_slashed(Parser._parse_AND, Parser._parse_NOT))(rest)
-        suffix, rest = Parser._parse_suffix(rest)
+        nodes, rest = P._maybe(P._slashed(P._AND, P._NOT))(rest)
+        suffix, rest = P._suffix(rest)
         prefix.children = nodes + suffix
         return [prefix], rest
 
     @staticmethod
-    def _parse_suffix(rest):
+    def _suffix(rest):
         """
         Suffix <- Primary (QUESTION / STAR / PLUS)?
         """
         suffix = Node("suffix")
-        prim, rest = Parser._parse_primary(rest)
-        nodes, rest = Parser._parse_maybe(Parser._parse_slashed(Parser._parse_QUESTION,
-                                                                Parser._parse_STAR,
-                                                                Parser._parse_PLUS))(rest)
+        prim, rest = P._primary(rest)
+        nodes, rest = P._maybe(P._slashed(P._QUESTION, P._STAR, P._PLUS))(rest)
         suffix.children = prim + nodes
         return [suffix], rest
 
 
     @staticmethod
-    def _parse_primary(rest):
+    def _primary(rest):
         """
         Primary <- Identifier (!LEFTARROW) / (OPEN Expression CLOSE) / Literal / Class / DOT
         """
         prim = Node("primary")
-        nodes, rest = Parser._parse_slashed(Parser._parse_paren(Parser._parse_IDENTIFIER, Parser._parse_not(Parser._parse_LEFTARROW)),
-                                            Parser._parse_paren(Parser._parse_OPEN, Parser._parse_expression,Parser._parse_CLOSE),
-                                            Parser._parse_literal,
-                                            Parser._parse_class,
-                                            Parser._parse_DOT)(rest)
+        nodes, rest = P._slashed(P._paren(P._IDENTIFIER, P._not(P._LEFTARROW)), P._paren(P._OPEN, P._expression,P._CLOSE), P._literal, P._class, P._DOT)(rest)
         prim.children = nodes
         return [prim], rest
 
 
     @staticmethod
-    def _parse_IDENTIFIER(rest):
+    def _IDENTIFIER(rest):
         """
         Identifier <- IdentStart IdentCont* Spacing
         IdentStart <- [a-zA-Z_]
         IdentCont <- IdentStart / [0-9]
         """
-        return Parser._parse_terminal(r'[a-zA-Z_][a-zA-Z0-9_]*', "identifier")(rest)
+        return P._terminal(r'[a-zA-Z_][a-zA-Z0-9_]*', "identifier")(rest)
 
     @staticmethod
-    def _parse_literal(rest):
+    def _literal(rest):
         """
         Literal <- [''] (!['] Char)* [''] Spacing / ["] (!["] Char)* ["] Spacing
         """
         try:
             if rest[0] == "'":
-                return Parser._parse_terminal(r"""\'(.|\n|\r|\r\n)*?\'""", "literal")(rest)
+                return P._terminal(r"""\'(.|\n|\r|\r\n)*?\'""", "literal")(rest)
             else:
-                return Parser._parse_terminal(r"""\"(.|\n|\r|\r\n)*\?\"""", "literal")(rest)
+                return P._terminal(r"""\"(.|\n|\r|\r\n)*\?\"""", "literal")(rest)
         except:
             raise GrammarError
         
 
     @staticmethod
-    def _parse_class(rest):
+    def _class(rest):
         """
         Class <- '[' (!']' Range)* ']' Spacing
         """
-        return Parser._parse_terminal(r'\[(.(-.)?)*\]', "range")(rest)
+        return P._terminal(r'\[(.(-.)?)*\]', "range")(rest)
 
 
     @staticmethod
-    def _parse_terminal(terminal, name):
+    def _terminal(terminal, name):
         def inner(rest):
             try:
                 pos = re.match(terminal, rest).end()
@@ -235,94 +229,92 @@ class Parser:
             except:
                 raise TerminalError
 
-            spacing, rest = Parser._parse_spacing(rest)
+            spacing, rest = P._spacing(rest)
             return [node] + spacing, rest
         return inner
 
     @staticmethod
-    def _parse_LEFTARROW(rest):
+    def _LEFTARROW(rest):
         """
         LEFTARROW <- '<-' Spacing
         """
-        return Parser._parse_terminal(r'<-', "LEFTARROW")(rest)
+        return P._terminal(r'<-', "LEFTARROW")(rest)
 
     @staticmethod
-    def _parse_SLASH(rest):
+    def _SLASH(rest):
         """
         SLASH <- '/' Spacing
         """
-        return Parser._parse_terminal(r'/', "SLASH")(rest)
+        return P._terminal(r'/', "SLASH")(rest)
 
     @staticmethod
-    def _parse_AND(rest):
+    def _AND(rest):
         """
         AND <- '&' Spacing
         """
-        return Parser._parse_terminal(r'&', "AND")(rest)
+        return P._terminal(r'&', "AND")(rest)
 
     @staticmethod
-    def _parse_NOT(rest):
+    def _NOT(rest):
         """
         NOT <- '!' Spacing
         """
-        return Parser._parse_terminal(r'!', "NOT")(rest)
+        return P._terminal(r'!', "NOT")(rest)
 
     @staticmethod
-    def _parse_QUESTION(rest):
+    def _QUESTION(rest):
         """
         QUESTION <- '?' Spacing
         """
-        return Parser._parse_terminal(r'\?', "QUESTION")(rest)
+        return P._terminal(r'\?', "QUESTION")(rest)
 
     @staticmethod
-    def _parse_STAR(rest):
+    def _STAR(rest):
         """
         STAR <- '*' Spacing
         """
-        return Parser._parse_terminal(r'\*', "STAR")(rest)
+        return P._terminal(r'\*', "STAR")(rest)
 
     @staticmethod
-    def _parse_PLUS(rest):
+    def _PLUS(rest):
         """
         PLUS <- '+' Spacing
         """
-        return Parser._parse_terminal(r'\+', "PLUS")(rest)
+        return P._terminal(r'\+', "PLUS")(rest)
 
     @staticmethod
-    def _parse_OPEN(rest):
+    def _OPEN(rest):
         """
         OPEN <- '(' Spacing
         """
-        return Parser._parse_terminal(r'\(', "OPEN")(rest)
+        return P._terminal(r'\(', "OPEN")(rest)
 
     @staticmethod
-    def _parse_CLOSE(rest):
+    def _CLOSE(rest):
         """
         CLOSE <- ')' Spacing
         """
-        return Parser._parse_terminal(r'\)', "CLOSE")(rest)
+        return P._terminal(r'\)', "CLOSE")(rest)
 
     @staticmethod
-    def _parse_DOT(rest):
+    def _DOT(rest):
         """
         DOT <- '.' Spacing
         """
-        return Parser._parse_terminal(r'\.', "DOT")(rest)
+        return P._terminal(r'\.', "DOT")(rest)
 
     @staticmethod
-    def _parse_spacing(rest):
+    def _spacing(rest):
         """
         Spacing <- (Space / Comment)*
         """
         spacing = Node("spacing")
-        nodes, rest = Parser._parse_maybe(Parser._parse_some(Parser._parse_paren(
-            Parser._parse_slashed(Parser._parse_SPACE, 
-                                  Parser._parse_COMMENT))))(rest)
+        nodes, rest = P._maybe(P._some(P._paren(P._slashed(P._SPACE, P._COMMENT))))(rest)
         spacing.children = nodes
         return [spacing], rest
 
     @staticmethod
-    def _parse_COMMENT(rest):
+    def _COMMENT(rest):
         try:
             pos = re.match(r"#.*?(\r\n|\n|\r|$)", rest).end()
             return [Terminal("comment", rest[:pos])], rest[pos:]
@@ -330,7 +322,7 @@ class Parser:
             raise TerminalError
 
     @staticmethod
-    def _parse_SPACE(rest):
+    def _SPACE(rest):
         try:
             pos = re.match(r"( |\t|\r\n|\n|\r)+", rest).end()
             return [Terminal("space", rest[:pos])], rest[pos:]
@@ -339,14 +331,14 @@ class Parser:
 
 
     @staticmethod
-    def _parse_EOF(rest):
+    def _EOF(rest):
         if rest != "":
             raise TerminalError
         else:
             return [Terminal("eof", None)], None
 
     @staticmethod
-    def _parse_some(parser):
+    def _some(parser):
         """
         parses at least one of the passed in parser
         """
@@ -363,7 +355,7 @@ class Parser:
         return inner
 
     @staticmethod
-    def _parse_maybe(parser):
+    def _maybe(parser):
         """
         parses an optional item
         """
@@ -376,7 +368,7 @@ class Parser:
         return inner
 
     @staticmethod
-    def _parse_paren(*parsers):
+    def _paren(*parsers):
         """
         parses a parenthetical
         """
@@ -389,7 +381,7 @@ class Parser:
         return inner
 
     @staticmethod
-    def _parse_slashed(*parsers):
+    def _slashed(*parsers):
         """
         parses slash seperated values
         """
@@ -405,7 +397,7 @@ class Parser:
         return inner
 
     @staticmethod
-    def _parse_not(parser):
+    def _not(parser):
         """
         parses a not lookahead
         """
@@ -416,9 +408,8 @@ class Parser:
                 return [], rest
             raise GrammarError
         return inner
-#p1 = Parser(gram)
+p1 = P(gram)
 
-p = Parser(gram)
 
 
 
