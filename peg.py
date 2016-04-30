@@ -1,5 +1,5 @@
-import pprint
 import re
+import pprint 
 gram = """
 Grammar <- Spacing Definition+ EndOfFile
 Definition <- Identifier LEFTARROW Expression
@@ -45,9 +45,8 @@ Expr     <- Factor AddExpr*
 AddExpr  <- ('+'/'-') Factor
 Factor   <- Primary MulExpr*
 MulExpr  <- ('*'/'/') Primary
-Primary  <- '(' Expr ')'
-         / Number
-Number   <- '0' / [1-9] ([0-9] / _)+
+Primary  <- '(' Expr ')' / Number
+Number   <- '0' / [1-9] [0-9_]
 """
 
 
@@ -55,14 +54,15 @@ class Node:
     def __init__(self, t):
         self.type = t
         self._string = None
-        self.children = None
+        self.children = []
 
     @property
     def string(self):
         return None  # "complex" recursive thing
     
     def __repr__(self):
-        return str(self.children)
+        return self.type + ":" + str(self.children)
+
 
 class Terminal(Node):
     def __init__(self, t, string):
@@ -75,7 +75,7 @@ class Terminal(Node):
         return self._string
 
     def __repr__(self):
-        if self.type == "space":
+        if self.type == "space" or self.type == "eof":
             return ""
         return self.string
 
@@ -95,8 +95,35 @@ class NotError(GrammarError):
 class P:
     def __init__(self, grammar):
         self.grammar = grammar
-        self.parsed_grammar = self._grammar(grammar)
+        self.syntax_tree, _ = self._grammar(grammar)
+        self.syntax_tree = self.syntax_tree[0]
+        self.definitions = dict()
+        self._map_defns()
+        pprint.pprint(self.definitions)
 
+    def parse(self, string):
+        return self._parse(string, self.syntax_tree)
+
+    def _parse(self, string, node):
+        """
+        recursively parse nodes from the syntax
+        """
+        print(node.type)
+
+
+    def _map_defns(self):
+
+        nodes = [self.syntax_tree]
+        while nodes:
+            node = nodes.pop()
+            if not isinstance(node, Terminal):
+                for child in node.children:
+                    nodes.append(child)
+            if node.type == "definition":
+                self.definitions[str(node.children[0])] = node.children
+
+
+    # for bootstrapping the PEG parse tree
     @staticmethod
     def _grammar(grammar):
         """
@@ -108,11 +135,10 @@ class P:
 
         gram = Node("grammar")
         spacing, rest = P._spacing(grammar)
-        children = [spacing]
+        children = spacing
 
         definitions, rest = P._some(P._definition)(rest)
         children += definitions
-        pprint.pprint(children)
         eof, rest = P._EOF(rest)
         children += eof
         gram.children = children
@@ -230,7 +256,7 @@ class P:
                 raise TerminalError
 
             spacing, rest = P._spacing(rest)
-            return [node] + spacing, rest
+            return node + spacing, rest
         return inner
 
     @staticmethod
@@ -344,7 +370,7 @@ class P:
         """
         def inner(rest):
             node, rest = parser(rest)
-            nodes = [node]
+            nodes = node
             while True:
                 try:
                     node, rest = parser(rest)
@@ -364,7 +390,7 @@ class P:
                 node, rest = parser(rest)
             except GrammarError as e:
                 node, rest = [], rest
-            return [node], rest
+            return node, rest
         return inner
 
     @staticmethod
@@ -408,12 +434,10 @@ class P:
                 return [], rest
             raise GrammarError
         return inner
-p1 = P(gram)
 
-
-
-
-
+p1 = P(arithmetic)
+expr = "12*3+(4*9_000)"
+p1.parse(expr)
 
 
 
