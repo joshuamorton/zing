@@ -109,7 +109,30 @@ class TestMetaParserInternals(unittest.TestCase):
         self.assertEqual(single[0][0].type, "literal")
 
         # make sure none of these throw errors
-        self.p._literal('"\n"')
+        for lit in "\n\r+! ()/.?*'":
+            self.p._literal('"'+lit+'"')
+            self.p._literal("'"+lit+"'")
 
-    def test_suffix(self):
-        pass
+    def test_literal_errors(self):
+        _, r = self.p._literal("""'''""")  # that's a doozey
+        self.assertEqual(r, "'")
+
+    def test_primary(self):
+        n, r = self.p._primary("ide")
+        self.assertEqual(r, "")
+        self.assertEqual(n[0].type, 'primary')
+        self.assertEqual(n[0][0].string, "ide")
+        self.assertEqual(n[0][0].type, "identifier")
+
+        # make sure these all pass
+        self.p._primary("name")
+        self.p._primary("""'lit'""")
+        self.p._primary(".")
+        self.p._primary("[']")
+        
+
+    def test_primary_errors(self):
+        for prim in ["A <- B", "", "*", "()", "("]:
+            with self.assertRaises(peg.SlashError):
+                _, r = self.p._primary("A <- B")
+

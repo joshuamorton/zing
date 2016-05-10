@@ -203,9 +203,9 @@ class P:
         """
         try:
             if rest[0] == "'":
-                return self._terminal(r"""\'(.|\n|\r|\r\n)*?\'""", "literal")(rest)
+                return self._terminal(r"""\'([^']|\n|\r|\r\n)*?\'""", "literal")(rest)
             else:
-                return self._terminal(r"""\"(.|\n|\r|\r\n)*?\"""", "literal")(rest)
+                return self._terminal(r"""\"([^"]|\n|\r|\r\n)*?\"""", "literal")(rest)
         except:
             raise GrammarError
         
